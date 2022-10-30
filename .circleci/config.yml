@@ -60,11 +60,17 @@ docker_import: &docker_import
         -i /docker/$APP_NAME-latest.tar
 
 docker_push: &docker_push
-  run:
-    name: Push commit image to dockerhub
+  run: 
+    name: Push docker images to ECR
     command: |
-      docker push \
-        public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:$DOCKER_TAG
+      aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/o0z1n0s8
+      docker push public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:$DOCKER_TAG
+
+docker_login: &docker_login
+  aws-cli/setup:
+    aws-access-key-id: AWS_ACCESS_KEY
+    aws-secret-access-key: AWS_ACCESS_SECRET
+    aws-region: AWS_REGION_NAME        
 
 docker_release: &docker_release
   run:
@@ -78,6 +84,7 @@ docker_release: &docker_release
 version: 2.1
 orbs:
   docker: circleci/docker@2.0.3
+  aws-cli: circleci/aws-cli@2.0  
 jobs:
   fetch_deps:
     docker:
@@ -94,7 +101,7 @@ jobs:
       - run: mix do deps.get
       - save_cache:
           key: mix-deps-v1-{{ .Branch }}-{{ checksum "mix.lock" }}
-          paths: "deps"
+          paths: ["deps"]
 
   test_elixir:
     docker:
@@ -202,6 +209,7 @@ jobs:
           keys:
             - docker-www-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *docker_login
       - <<: *docker_push
 
   push-device:
@@ -215,6 +223,7 @@ jobs:
           keys:
             - docker-device-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *docker_login
       - <<: *docker_push
 
   push-api:
@@ -228,6 +237,7 @@ jobs:
           keys:
             - docker-api-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *docker_login
       - <<: *docker_push
 
   release-www:
@@ -292,7 +302,7 @@ workflows:
         #       tags:
         #         only: /.*/
         - build-www:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
               # - test_javascript
@@ -300,42 +310,42 @@ workflows:
               tags:
                 only: /.*/
         - build-device:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
             filters:
               tags:
                 only: /.*/
         - build-api:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
             filters:
               tags:
                 only: /.*/
         - push-www:
-            context: org-global
+            context: aws
             requires:
               - build-www
             filters:
               branches:
                 only: main
         - push-device:
-            context: org-global
+            context: aws
             requires:
               - build-device
             filters:
               branches:
                 only: main
         - push-api:
-            context: org-global
+            context: aws
             requires:
               - build-api
             filters:
               branches:
                 only: main
         - release-www:
-            context: org-global
+            context: aws
             requires:
               - build-www
             filters:
@@ -344,7 +354,7 @@ workflows:
               tags:
                 only: /v.*/
         - release-device:
-            context: org-global
+            context: aws
             requires:
               - build-device
             filters:
@@ -353,7 +363,7 @@ workflows:
               tags:
                 only: /v.*/
         - release-api:
-            context: org-global
+            context: aws
             requires:
               - build-api
             filters:
