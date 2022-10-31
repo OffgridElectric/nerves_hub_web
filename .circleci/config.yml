@@ -66,7 +66,7 @@ docker_push: &docker_push
       aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/o0z1n0s8
       docker push public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:$DOCKER_TAG
 
-docker_login: &docker_login
+aws-login: &aws-login
   aws-cli/setup:
     aws-access-key-id: AWS_ACCESS_KEY
     aws-secret-access-key: AWS_ACCESS_SECRET
@@ -209,7 +209,7 @@ jobs:
           keys:
             - docker-www-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
-      - <<: *docker_login
+      - <<: *aws-login
       - <<: *docker_push
 
   push-device:
@@ -223,7 +223,7 @@ jobs:
           keys:
             - docker-device-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
-      - <<: *docker_login
+      - <<: *aws-login
       - <<: *docker_push
 
   push-api:
@@ -237,7 +237,7 @@ jobs:
           keys:
             - docker-api-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
-      - <<: *docker_login
+      - <<: *aws-login
       - <<: *docker_push
 
   release-www:
