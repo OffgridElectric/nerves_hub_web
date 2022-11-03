@@ -76,15 +76,6 @@ aws_login: &aws_login
     aws-secret-access-key: AWS_ACCESS_SECRET
     aws-region: AWS_REGION_NAME        
 
-docker_release: &docker_release
-  run:
-    name: Release docker images to dockerhub
-    command: |
-      docker push \
-        public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:$DOCKER_VERSION_TAG
-      docker push \
-        public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:latest
-
 redeploy-service: &redeploy-service
   run:
     name: Redeploy tasks
