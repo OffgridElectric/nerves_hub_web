@@ -22,7 +22,7 @@ docker_env: &docker_env
 
       echo "export DOCKER_TAG=$TAG" >> $BASH_ENV
       echo "export DOCKER_VERSION_TAG=$VERSION" >> $BASH_ENV
-      echo "export BRANCH=$CIRCLE_BRANCH"
+      echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
       echo "export DOCKER_REGISTRY=public.ecr.aws/o0z1n0s8/nerveshub" >> $BASH_ENV
 
 docker_build_release: &docker_build_release
