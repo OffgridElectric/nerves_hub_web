@@ -22,6 +22,7 @@ docker_env: &docker_env
 
       echo "export DOCKER_TAG=$TAG" >> $BASH_ENV
       echo "export DOCKER_VERSION_TAG=$VERSION" >> $BASH_ENV
+      echo "export BRANCH=$CIRCLE_BRANCH"
       echo "export DOCKER_REGISTRY=public.ecr.aws/o0z1n0s8/nerveshub" >> $BASH_ENV
 
 docker_build_release: &docker_build_release
@@ -31,6 +32,7 @@ docker_build_release: &docker_build_release
       docker build \
         -t $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG \
         -t $DOCKER_REGISTRY/$APP_NAME:$DOCKER_VERSION_TAG \
+        -t $DOCKER_REGISTRY/$APP_NAME:$BRANCH \
         -t $DOCKER_REGISTRY/$APP_NAME:latest \
         -f apps/$APP_NAME/rel/Dockerfile.build .
 
@@ -66,6 +68,7 @@ docker_push: &docker_push
     command: |
       aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/o0z1n0s8
       docker push $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG
+      docker push $DOCKER_REGISTRY/$APP_NAME:$BRANCH
 
 aws_login: &aws_login
   aws-cli/setup:
@@ -81,6 +84,14 @@ docker_release: &docker_release
         public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:$DOCKER_VERSION_TAG
       docker push \
         public.ecr.aws/o0z1n0s8/nerveshub/$APP_NAME:latest
+
+redeploy-service: &redeploy-service
+  run:
+    name: Redeploy tasks
+    command: |
+      for i in services; do
+        aws ecs update-service --cluster $CLUSTER --service $i --force-new-deployment 
+      done 
 
 version: 2.1
 orbs:
@@ -241,44 +252,21 @@ jobs:
       - <<: *aws_login
       - <<: *docker_push
 
-  release-www:
+  deploy-staging:
     <<: *defaults
     steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_www" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-www-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
+      - run: echo "export CLUSTER=nerves-hub-staging" >> $BASH_ENV
+      - run: echo "export services=[nerves-hub-device,nerves-hub-api,nerves-hub-www]" >> $BASH_ENV
+      - <<: *aws_login
+      - <<: *redeploy-service   
 
-  release-device:
+  deploy-prod:
     <<: *defaults
     steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_device" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-device-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
-
-  release-api:
-    <<: *defaults
-    steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_api" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-api-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
+      - run: echo "export CLUSTER=nerves-hub" >> $BASH_ENV
+      - run: echo "export services=[nerves-hub-device,nerves-hub-api,nerves-hub-www]" >> $BASH_ENV
+      - <<: *aws_login
+      - <<: *redeploy-service    
 
 workflows:
   version: 2
@@ -289,24 +277,15 @@ workflows:
               tags:
                 only: /.*/
         - test_elixir:
-            context: org-global
             requires:
               - fetch_deps
             filters:
               tags:
                 only: /.*/
-        # - test_javascript:
-        #     context: org-global
-        #     requires:
-        #       - fetch_deps
-        #     filters:
-        #       tags:
-        #         only: /.*/
         - build-www:
             context: aws
             requires:
               - test_elixir
-              # - test_javascript
             filters:
               tags:
                 only: /.*/
@@ -330,45 +309,36 @@ workflows:
               - build-www
             filters:
               branches:
-                only: main
+                only: [main,develop]
         - push-device:
             context: aws
             requires:
               - build-device
             filters:
               branches:
-                only: main
+                only: [main,develop]
         - push-api:
             context: aws
             requires:
               - build-api
             filters:
               branches:
-                only: main
-        - release-www:
-            context: aws
-            requires:
-              - build-www
+                only: [main,develop]
+        - deploy-staging:
+            context: aws-infra
+            requires: 
+              - push-api
+              - push-device
+              - push-www
             filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
-        - release-device:
-            context: aws
-            requires:
-              - build-device
+              branches: 
+                only: [develop]  
+        - deploy-prod:
+            context: aws-infra
+            requires: 
+              - push-api
+              - push-device
+              - push-www
             filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
-        - release-api:
-            context: aws
-            requires:
-              - build-api
-            filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
+              branches: 
+                only: [main]                 
