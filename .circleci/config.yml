@@ -334,7 +334,7 @@ workflows:
               branches: 
                 only: [develop]  
         - deploy-prod:
-            context: aws-infra
+            context: aws-prod
             requires: 
               - push-api
               - push-device
