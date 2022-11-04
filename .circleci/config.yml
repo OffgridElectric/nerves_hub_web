@@ -23,7 +23,7 @@ docker_env: &docker_env
       echo "export DOCKER_TAG=$TAG" >> $BASH_ENV
       echo "export DOCKER_VERSION_TAG=$VERSION" >> $BASH_ENV
       echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
-      echo "export DOCKER_REGISTRY=public.ecr.aws/o0z1n0s8/nerveshub" >> $BASH_ENV
+      echo "export DOCKER_REGISTRY=005352568091.dkr.ecr.eu-west-1.amazonaws.com" >> $BASH_ENV
 
 docker_build_release: &docker_build_release
   run:
@@ -295,21 +295,21 @@ workflows:
               tags:
                 only: /.*/
         - push-www:
-            context: aws
+            context: aws-infra
             requires:
               - build-www
             filters:
               branches:
                 only: [main,develop]
         - push-device:
-            context: aws
+            context: aws-infra
             requires:
               - build-device
             filters:
               branches:
                 only: [main,develop]
         - push-api:
-            context: aws
+            context: aws-infra
             requires:
               - build-api
             filters:
