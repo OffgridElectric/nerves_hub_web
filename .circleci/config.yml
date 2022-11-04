@@ -66,7 +66,7 @@ docker_push: &docker_push
   run: 
     name: Push docker images to ECR
     command: |
-      aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/o0z1n0s8
+      aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 005352568091.dkr.ecr.eu-west-1.amazonaws.com
       docker push $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG
       docker push $DOCKER_REGISTRY/$APP_NAME:$BRANCH
 
