@@ -22,15 +22,18 @@ docker_env: &docker_env
 
       echo "export DOCKER_TAG=$TAG" >> $BASH_ENV
       echo "export DOCKER_VERSION_TAG=$VERSION" >> $BASH_ENV
+      echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
+      echo "export DOCKER_REGISTRY=005352568091.dkr.ecr.eu-west-1.amazonaws.com" >> $BASH_ENV
 
 docker_build_release: &docker_build_release
   run:
     name: Build docker images
     command: |
       docker build \
-        -t nerveshub/$APP_NAME:$DOCKER_TAG \
-        -t nerveshub/$APP_NAME:$DOCKER_VERSION_TAG \
-        -t nerveshub/$APP_NAME:latest \
+        -t $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG \
+        -t $DOCKER_REGISTRY/$APP_NAME:$DOCKER_VERSION_TAG \
+        -t $DOCKER_REGISTRY/$APP_NAME:$BRANCH \
+        -t $DOCKER_REGISTRY/$APP_NAME:latest \
         -f apps/$APP_NAME/rel/Dockerfile.build .
 
 docker_save: &docker_save
@@ -39,14 +42,17 @@ docker_save: &docker_save
     command: |
       mkdir -p /docker
       docker save \
-        nerveshub/$APP_NAME:$DOCKER_TAG \
+        $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG \
         -o /docker/$APP_NAME-$DOCKER_TAG.tar
       docker save \
-        nerveshub/$APP_NAME:$DOCKER_VERSION_TAG \
+        $DOCKER_REGISTRY/$APP_NAME:$DOCKER_VERSION_TAG \
         -o /docker/$APP_NAME-$DOCKER_VERSION_TAG.tar
       docker save \
-        nerveshub/$APP_NAME:latest \
+        $DOCKER_REGISTRY/$APP_NAME:latest \
         -o /docker/$APP_NAME-latest.tar
+      docker save \
+        $DOCKER_REGISTRY/$APP_NAME:$BRANCH \
+        -o /docker/$APP_NAME-$BRANCH.tar
 
 docker_import: &docker_import
   run:
@@ -58,28 +64,35 @@ docker_import: &docker_import
         -i /docker/$APP_NAME-$DOCKER_VERSION_TAG.tar
       docker load \
         -i /docker/$APP_NAME-latest.tar
+      docker load \
+        -i /docker/$APP_NAME-$BRANCH.tar
 
 docker_push: &docker_push
-  run:
-    name: Push commit image to dockerhub
+  run: 
+    name: Push docker images to ECR
     command: |
-      docker login -u $DOCKER_USER -p $DOCKER_PASS
-      docker push \
-        nerveshub/$APP_NAME:$DOCKER_TAG
+      aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 005352568091.dkr.ecr.eu-west-1.amazonaws.com
+      docker push $DOCKER_REGISTRY/$APP_NAME:$DOCKER_TAG
+      docker push $DOCKER_REGISTRY/$APP_NAME:$BRANCH
 
-docker_release: &docker_release
+aws_login: &aws_login
+  aws-cli/setup:
+    aws-access-key-id: AWS_ACCESS_KEY_ID
+    aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+    aws-region: AWS_REGION_NAME        
+
+redeploy-service: &redeploy-service
   run:
-    name: Release docker images to dockerhub
+    name: Redeploy tasks
     command: |
-      docker login -u $DOCKER_USER -p $DOCKER_PASS
-      docker push \
-        nerveshub/$APP_NAME:$DOCKER_VERSION_TAG
-      docker push \
-        nerveshub/$APP_NAME:latest
+      for i in nerves-hub-device nerves-hub-api nerves-hub-www; do
+        aws ecs update-service --cluster $CLUSTER --service $i --force-new-deployment 
+      done 
 
 version: 2.1
 orbs:
   docker: circleci/docker@2.0.3
+  aws-cli: circleci/aws-cli@3.1.3
 jobs:
   fetch_deps:
     docker:
@@ -96,7 +109,7 @@ jobs:
       - run: mix do deps.get
       - save_cache:
           key: mix-deps-v1-{{ .Branch }}-{{ checksum "mix.lock" }}
-          paths: "deps"
+          paths: ["deps"]
 
   test_elixir:
     docker:
@@ -165,7 +178,7 @@ jobs:
       - <<: *docker_save
       - save_cache:
           key: docker-www-{{ .Branch }}-{{ .Revision }}
-          paths: "/docker"
+          paths: ["/docker"]
 
   build-device:
     <<: *defaults
@@ -178,7 +191,7 @@ jobs:
       - <<: *docker_save
       - save_cache:
           key: docker-device-{{ .Branch }}-{{ .Revision }}
-          paths: "/docker"
+          paths: ["/docker"]
 
   build-api:
     <<: *defaults
@@ -191,7 +204,7 @@ jobs:
       - <<: *docker_save
       - save_cache:
           key: docker-api-{{ .Branch }}-{{ .Revision }}
-          paths: "/docker"
+          paths: ["/docker"]
 
   push-www:
     <<: *defaults
@@ -204,6 +217,7 @@ jobs:
           keys:
             - docker-www-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *aws_login
       - <<: *docker_push
 
   push-device:
@@ -217,6 +231,7 @@ jobs:
           keys:
             - docker-device-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *aws_login
       - <<: *docker_push
 
   push-api:
@@ -230,46 +245,23 @@ jobs:
           keys:
             - docker-api-{{ .Branch }}-{{ .Revision }}
       - <<: *docker_import
+      - <<: *aws_login
       - <<: *docker_push
 
-  release-www:
+  deploy-staging:
     <<: *defaults
     steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_www" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-www-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
+      - run: echo "export CLUSTER=nerves-hub-staging" >> $BASH_ENV
+      - <<: *aws_login
+      - <<: *redeploy-service   
 
-  release-device:
+  deploy-prod:
     <<: *defaults
     steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_device" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-device-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
-
-  release-api:
-    <<: *defaults
-    steps:
-      - checkout
-      - run: echo "export APP_NAME=nerves_hub_api" >> $BASH_ENV
-      - <<: *remote_docker
-      - <<: *docker_env
-      - restore_cache:
-          keys:
-            - docker-api-{{ .Branch }}-{{ .Revision }}
-      - <<: *docker_import
-      - <<: *docker_release
+      - run: echo "export CLUSTER=nerves-hub" >> $BASH_ENV
+      - run: echo "export services=[nerves-hub-device,nerves-hub-api,nerves-hub-www]" >> $BASH_ENV
+      - <<: *aws_login
+      - <<: *redeploy-service    
 
 workflows:
   version: 2
@@ -280,86 +272,68 @@ workflows:
               tags:
                 only: /.*/
         - test_elixir:
-            context: org-global
             requires:
               - fetch_deps
             filters:
               tags:
                 only: /.*/
-        # - test_javascript:
-        #     context: org-global
-        #     requires:
-        #       - fetch_deps
-        #     filters:
-        #       tags:
-        #         only: /.*/
         - build-www:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
-              # - test_javascript
             filters:
               tags:
                 only: /.*/
         - build-device:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
             filters:
               tags:
                 only: /.*/
         - build-api:
-            context: org-global
+            context: aws
             requires:
               - test_elixir
             filters:
               tags:
                 only: /.*/
         - push-www:
-            context: org-global
+            context: aws-infra
             requires:
               - build-www
             filters:
               branches:
-                only: main
+                only: [main,develop]
         - push-device:
-            context: org-global
+            context: aws-infra
             requires:
               - build-device
             filters:
               branches:
-                only: main
+                only: [main,develop]
         - push-api:
-            context: org-global
+            context: aws-infra
             requires:
               - build-api
             filters:
               branches:
-                only: main
-        - release-www:
-            context: org-global
-            requires:
-              - build-www
+                only: [main,develop]
+        - deploy-staging:
+            context: aws-infra
+            requires: 
+              - push-api
+              - push-device
+              - push-www
             filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
-        - release-device:
-            context: org-global
-            requires:
-              - build-device
+              branches: 
+                only: [develop]  
+        - deploy-prod:
+            context: aws-prod
+            requires: 
+              - push-api
+              - push-device
+              - push-www
             filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
-        - release-api:
-            context: org-global
-            requires:
-              - build-api
-            filters:
-              branches:
-                ignore: /.*/
-              tags:
-                only: /v.*/
+              branches: 
+                only: [main]                 
