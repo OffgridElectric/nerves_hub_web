@@ -81,6 +81,12 @@ aws_login: &aws_login
     aws-secret-access-key: AWS_SECRET_ACCESS_KEY
     aws-region: AWS_REGION_NAME        
 
+run-migrations: &run-migrations
+  run:
+    name: Run migration
+    command: |
+      rel/scripts/ecs-migrate.sh nerves-hub-staging nerves-hub-staging nerves-hub-staging-www nerves-hub-staging-web-sg
+
 redeploy-service: &redeploy-service
   run:
     name: Redeploy tasks
@@ -253,6 +259,7 @@ jobs:
     steps:
       - run: echo "export CLUSTER=nerves-hub-staging" >> $BASH_ENV
       - <<: *aws_login
+      - <<: *run-migrations
       - <<: *redeploy-service   
 
   deploy-prod:
@@ -304,21 +311,21 @@ workflows:
               - build-www
             filters:
               branches:
-                only: [main,develop]
+                only: [main,develop,ID]
         - push-device:
             context: aws-infra
             requires:
               - build-device
             filters:
               branches:
-                only: [main,develop]
+                only: [main,develop,ID]
         - push-api:
             context: aws-infra
             requires:
               - build-api
             filters:
               branches:
-                only: [main,develop]
+                only: [main,develop,ID]
         - deploy-staging:
             context: aws-infra
             requires: 
@@ -327,7 +334,7 @@ workflows:
               - push-www
             filters:
               branches: 
-                only: [develop]  
+                only: [develop,ID]
         - deploy-prod:
             context: aws-prod
             requires: 
