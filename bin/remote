@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Script to search in AWS for instance running a cluster/image/task
+# shellcheck disable=SC2317
+
+set -e
+# set -x
+
+##########################################################################
+# Environment variables
+# * V: verbose if 1
+##########################################################################
+if [ "${V}" = "1" ]; then
+  set -x
+fi
+
+export taskname
+export task_arn
+export cluster
+export local_ipv4
+export exec
+
+log() {
+  # shellcheck disable=SC2059
+  printf "$@" >&2
+  printf "\n" >&2
+}
+
+info() {
+  local fmt="${1}"
+  shift
+  log "\033[034m[I]\033[0m ${fmt}" "$@"
+}
+
+err() {
+  local fmt="${1}"
+  shift
+  log "\033[031m[E]\033[0m ${fmt}" "$@"
+}
+
+usage() {
+  printf "Usage: %s <task> [args]\n" "$0"
+  printf "  * task:                device | ca | api | www\n"
+  printf "  * command:             \n"
+  printf "    - if no arg, execute an interactive (bourne)shell\n"
+  printf "    - if arguments, they are passed as is to /app/bin/<APPNAME> script\n"
+  printf "\n"
+  printf "  The following env vars must be set:\n"
+  printf "  * NH_ENV               \`staging | prod\`\n"
+  printf "  * AWS_PROFILE          name of the profile used for connecting to AWS instance\n"
+  printf "\n"
+
+  exit "$1"
+}
+
+get_aws_env() {
+  # Gather container coordinates from AWS
+  local cluster_arns=()
+  while IFS='' read -r line; do
+    cluster_arns+=("$line")
+  done < <(aws ecs list-clusters --query 'clusterArns[?contains(@, `'"$cluster"'`)]' --output text | awk '{print $1;}')
+
+  if [ ${#cluster_arns[*]} -gt 1 ]; then
+    err "Multiple clusters matching filter: ${cluster}. Exiting..."
+    exit 1
+  fi
+
+  local cluster_arn=${cluster_arns[0]}
+  info "CLUSTER_ARN=${cluster_arn}"
+
+  local desc
+  local arn
+  for task in $(aws ecs list-tasks --cluster "$cluster_arn" --query 'taskArns' --output text); do
+    desc=$(aws ecs describe-tasks --cluster "$cluster_arn" --tasks "${task}" --query 'tasks[?containers[0].name==`'"$taskname"'`]' --output json)
+    if test "${desc}" != "[]"; then
+      arn=$(echo "${desc}" | jq -r '.[0] .containers[0] .taskArn')
+      if test -n "${arn}"; then
+        local_ipv4=$(echo "${desc}" | jq -r '.[0] .containers[0] .networkInterfaces[0] .privateIpv4Address')
+        task_arn="${arn}"
+        break
+      fi
+    fi
+  done
+
+  if [ -z "$task_arn" ]; then
+    err "No Matching task Found"
+    exit 1
+  fi
+
+  export task_arn
+  info "TASK_ARN=${task_arn}"
+  export local_ipv4
+  info "LOCAL_IPV4=${local_ipv4}"
+}
+
+exec_cmd() {
+  info "CMD=${exec[*]} ${*}"
+  exec aws ecs execute-command \
+    --cluster "${cluster}" \
+    --task "${task_arn}" \
+    --container "${taskname}" \
+    --command "sh -c 'LOCAL_IPV4=${local_ipv4} /app/docker-entrypoint.sh ${exec[*]} ${*}'" \
+    --interactive
+}
+
+if [ $# -lt 1 ]; then
+  usage 1
+fi
+
+if test -n "${AWS_PROFILE}"; then
+  info "AWS_PROFILE=${AWS_PROFILE}"
+else
+  err "AWS_PROFILE must be set"
+  exit 1
+fi
+
+case ${NH_ENV} in
+staging)
+  info "NH_ENV=staging"
+  cluster=nerves-hub-staging
+  ;;
+*)
+  err "NH_ENV must be set"
+  usage 1
+esac
+
+case $1 in
+device)
+  shift
+  taskname=nerves_hub_device
+  ;;
+ca)
+  shift
+  taskname=nerves_hub_ca
+  ;;
+api)
+  shift
+  taskname=nerves_hub_api
+  ;;
+www)
+  shift
+  taskname=nerves_hub_www
+  ;;
+*)
+  err "Invalid task: $1"
+  usage 1
+esac
+
+info "TASK=${taskname}"
+
+get_aws_env
+
+if test -n "$1"; then
+  exec=("/app/bin/${taskname}")
+  exec_cmd "$@"
+else
+  exec=("/bin/sh")
+  exec_cmd
+fi
+
+exit 0
