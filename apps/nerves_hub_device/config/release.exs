@@ -38,12 +38,14 @@ config :nerves_hub_web_core, NervesHubWebCore.Workers.FirmwaresTransferS3Ingress
 
 config :nerves_hub_device, NervesHubDeviceWeb.Endpoint, server: true
 
-config :nerves_hub_web_core, NervesHubWebCore.Mailer,
-  adapter: Bamboo.SMTPAdapter,
-  server: System.fetch_env!("SES_SERVER"),
-  port: System.fetch_env!("SES_PORT"),
-  username: System.fetch_env!("SMTP_USERNAME"),
-  password: System.fetch_env!("SMTP_PASSWORD")
+# config :nerves_hub_web_core, NervesHubWebCore.Mailer,
+#   adapter: Bamboo.SMTPAdapter,
+#   server: System.fetch_env!("SES_SERVER"),
+#   port: System.fetch_env!("SES_PORT"),
+#   username: System.fetch_env!("SMTP_USERNAME"),
+#   password: System.fetch_env!("SMTP_PASSWORD")
+
+config :nerves_hub_web_core, NervesHubWebCore.Mailer, adapter: Bamboo.SesAdapter
 
 host = System.fetch_env!("HOST")
 

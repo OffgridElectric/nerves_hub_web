@@ -27,11 +27,13 @@ config :nerves_hub_web_core,
   host: "www.nerves-hub.org",
   port: 80
 
-config :nerves_hub_web_core, NervesHubWebCore.Mailer,
-  adapter: Bamboo.SMTPAdapter,
-  tls: :always,
-  ssl: false,
-  retries: 1
+# config :nerves_hub_web_core, NervesHubWebCore.Mailer,
+#   adapter: Bamboo.SMTPAdapter,
+#   tls: :always,
+#   ssl: false,
+#   retries: 1
+
+config :nerves_hub_web_core, NervesHubWebCore.Mailer, adapter: Bamboo.SesAdapter
 
 config :nerves_hub_web_core, NervesHubWebCore.Repo, pool_size: 20
 

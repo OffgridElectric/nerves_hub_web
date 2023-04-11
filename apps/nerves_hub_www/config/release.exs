@@ -40,12 +40,14 @@ config :nerves_hub_www, NervesHubWWWWeb.Endpoint,
   secret_key_base: System.fetch_env!("SECRET_KEY_BASE"),
   live_view: [signing_salt: System.fetch_env!("LIVE_VIEW_SIGNING_SALT")]
 
-config :nerves_hub_web_core, NervesHubWebCore.Mailer,
-  adapter: Bamboo.SMTPAdapter,
-  server: System.fetch_env!("SES_SERVER"),
-  port: System.fetch_env!("SES_PORT"),
-  username: System.fetch_env!("SMTP_USERNAME"),
-  password: System.fetch_env!("SMTP_PASSWORD")
+# config :nerves_hub_web_core, NervesHubWebCore.Mailer,
+#   adapter: Bamboo.SMTPAdapter,
+#   server: System.fetch_env!("SES_SERVER"),
+#   port: System.fetch_env!("SES_PORT"),
+#   username: System.fetch_env!("SMTP_USERNAME"),
+#   password: System.fetch_env!("SMTP_PASSWORD")
+
+config :nerves_hub_web_core, NervesHubWebCore.Mailer, adapter: Bamboo.SesAdapter
 
 config :nerves_hub_web_core,
   host: host,
