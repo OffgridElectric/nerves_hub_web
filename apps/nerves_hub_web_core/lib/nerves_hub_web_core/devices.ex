@@ -419,7 +419,7 @@ defmodule NervesHubWebCore.Devices do
         {:error, :not_found}
 
       ca_cert ->
-        with {:ok, %{jitp: jitp}} <- preload_cert(ca_cert, jitp: :product) do
+        with {:ok, %{jitp: jitp}} <- preload_cert(ca_cert) do
           {:ok, jitp}
         end
     end
@@ -454,7 +454,7 @@ defmodule NervesHubWebCore.Devices do
     end
   end
 
-  def preload_cert(%CACertificate{} = certificate, opts \\ [:jitp]) do
+  def preload_cert(%CACertificate{} = certificate, opts \\ [jitp: :product]) do
     {:ok, Repo.preload(certificate, opts)}
   end
 

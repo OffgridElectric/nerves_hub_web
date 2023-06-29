@@ -14,7 +14,15 @@ defmodule NervesHubAPIWeb.CACertificateController do
     render(conn, "index.json", ca_certificates: ca_certificates)
   end
 
-  def show(%{assigns: %{org: org}} = conn, %{"serial" => serial}) do
+  def show(%{assigns: %{org: _org}} = conn, %{"serial_or_ski" => "/ski/" <> ski16}) do
+    ski = ski16 |> String.upcase() |> Base.decode16!()
+
+    with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_ski(ski) do
+      render(conn, "show.json", ca_certificate: ca_certificate)
+    end
+  end
+
+  def show(%{assigns: %{org: org}} = conn, %{"serial_or_ski" => serial}) do
     with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_org_and_serial(org, serial) do
       render(conn, "show.json", ca_certificate: ca_certificate)
     end
@@ -44,7 +52,7 @@ defmodule NervesHubAPIWeb.CACertificateController do
       |> put_status(:created)
       |> put_resp_header(
         "location",
-        Routes.ca_certificate_path(conn, :show, org.name, ca_certificate.serial)
+        Routes.ca_certificate_path(conn, :show, org.name, "", %{serial: ca_certificate.serial})
       )
       |> render("show.json", ca_certificate: ca_certificate)
     else

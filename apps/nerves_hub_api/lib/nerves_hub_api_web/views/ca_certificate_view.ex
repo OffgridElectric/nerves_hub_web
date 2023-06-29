@@ -15,7 +15,22 @@ defmodule NervesHubAPIWeb.CACertificateView do
       serial: ca_certificate.serial,
       not_before: ca_certificate.not_before,
       not_after: ca_certificate.not_after,
-      description: ca_certificate.description
+      description: ca_certificate.description,
+      jitp: render_one(ca_certificate, CACertificateView, "jitp.json")
     }
+  end
+
+  def render("jitp.json", %{ca_certificate: ca_certificate}) do
+    case ca_certificate.jitp do
+      %Ecto.Association.NotLoaded{} ->
+        %{}
+
+      jitp ->
+        %{
+          product: jitp.product && jitp.product.name,
+          description: jitp.description,
+          tags: jitp.tags
+        }
+    end
   end
 end
