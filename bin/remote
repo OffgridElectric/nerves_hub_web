@@ -113,10 +113,14 @@ else
   exit 1
 fi
 
-case ${NH_ENV} in
+case "${NH_ENV}" in
 staging)
   info "NH_ENV=staging"
   cluster=nerves-hub-staging
+  ;;
+prod)
+  info "NH_ENV=prod"
+  cluster=nerves-hub-production
   ;;
 *)
   err "NH_ENV must be set"

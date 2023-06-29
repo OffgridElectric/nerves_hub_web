@@ -337,8 +337,20 @@ defmodule NervesHubWebCore.Fixtures do
     der = Certificate.to_der(cert)
     params = %{serial: serial, aki: aki, ski: ski, not_before: not_before, not_after: not_after, der: der}
 
-    {:ok, device_cert} = Devices.create_device_certificate(device, params)
-    %{db_cert: device_cert, cert: cert}
+    case Devices.create_device_certificate(device, params) do
+      {:ok, device_cert} ->
+        %{db_cert: device_cert, cert: cert}
+        {:error, changeset} ->
+          raise """
+          Error creating device certificate fixture
+
+          #{inspect errors_on(changeset)}
+
+          Arguments:
+            [0] device: #{inspect device}
+            [1] params: #{inspect params}
+          """
+        end
   end
 
   def device_certificate_fixture_without_der(%Devices.Device{} = device, cert) do
@@ -421,5 +433,13 @@ defmodule NervesHubWebCore.Fixtures do
 
   defp counter do
     System.unique_integer([:positive])
+  end
+
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
   end
 end

@@ -1,7 +1,9 @@
 import Config
 
-web_host = "nerves-hub.org"
-web_port = 4000
+host = System.get_env("HOST", "nerves-hub.org")
+
+web_host = host
+web_port = 4010
 web_scheme = "http"
 
 ssl_dir =
@@ -20,28 +22,31 @@ config :nerves_hub_api, NervesHubAPIWeb.Endpoint,
   check_origin: false,
   watchers: [],
   pubsub_server: NervesHubWeb.PubSub,
+  url: [host: "api.#{host}"],
   https: [
-    port: 4002,
+    port: 4012,
     otp_app: :nerves_hub_api,
     # Enable client SSL
     verify: :verify_peer,
     versions: [:"tlsv1.2"],
-    keyfile: Path.join(ssl_dir, "api.nerves-hub.org-key.pem"),
-    certfile: Path.join(ssl_dir, "api.nerves-hub.org.pem"),
+    keyfile: Path.join(ssl_dir, "api.#{host}-key.pem"),
+    certfile: Path.join(ssl_dir, "api.#{host}.pem"),
     cacertfile: Path.join(ssl_dir, "ca.pem")
   ]
 
 ##
 # NervesHubDevice
 #
+
 config :nerves_hub_device, NervesHubDeviceWeb.Endpoint,
   debug_errors: true,
   code_reloader: false,
   check_origin: false,
   watchers: [],
+  url: [host: "device.#{host}"],
   https: [
     ip: {0, 0, 0, 0},
-    port: 4001,
+    port: 4011,
     otp_app: :nerves_hub_device,
     # Enable client SSL
     # Older versions of OTP 25 may break using using devices
@@ -90,8 +95,8 @@ config :nerves_hub_device, NervesHubDeviceWeb.Endpoint,
     verify: :verify_peer,
     verify_fun: {&NervesHubDevice.SSL.verify_fun/3, nil},
     fail_if_no_peer_cert: true,
-    keyfile: Path.join(ssl_dir, "device.nerves-hub.org-key.pem"),
-    certfile: Path.join(ssl_dir, "device.nerves-hub.org.pem"),
+    keyfile: Path.join(ssl_dir, "device.#{host}-key.pem"),
+    certfile: Path.join(ssl_dir, "device.#{host}.pem"),
     cacertfile: Path.join(ssl_dir, "ca.pem")
   ]
 
@@ -114,11 +119,12 @@ config :nerves_hub_web_core, NervesHubWebCore.Firmwares.Upload.File,
 config :nerves_hub_web_core, NervesHubWebCore.Repo, ssl: false
 
 config :nerves_hub_web_core, NervesHubWebCore.CertificateAuthority,
-  host: "0.0.0.0",
+#  host: "0.0.0.0",
+  host: "device.nerveshub.zolaelectric.local",
   port: 8443,
   ssl: [
     cacertfile: Path.join(ssl_dir, "ca.pem"),
-    server_name_indication: 'ca.nerves-hub.org'
+    server_name_indication: 'ca.nerveshub.zolaelectric.local'
   ]
 
 config :nerves_hub_web_core, NervesHubWebCore.Mailer, adapter: Bamboo.LocalAdapter
