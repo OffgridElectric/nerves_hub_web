@@ -407,7 +407,7 @@ defmodule NervesHubWebCore.Devices do
     Repo.get_by(CACertificate, ski: ski)
     |> case do
       nil -> {:error, :not_found}
-      ca_cert -> preload_cert(ca_cert)
+      ca_cert -> preload_cert(ca_cert, jitp: :product)
     end
   end
 
@@ -430,7 +430,7 @@ defmodule NervesHubWebCore.Devices do
     Repo.get_by(CACertificate, serial: serial)
     |> case do
       nil -> {:error, :not_found}
-      ca_cert -> preload_cert(ca_cert)
+      ca_cert -> preload_cert(ca_cert, jitp: :product)
     end
   end
 
@@ -450,11 +450,11 @@ defmodule NervesHubWebCore.Devices do
         {:error, :not_found}
 
       ca_cert ->
-        preload_cert(ca_cert)
+        preload_cert(ca_cert, jitp: :product)
     end
   end
 
-  def preload_cert(%CACertificate{} = certificate, opts \\ [:jitp]) do
+  def preload_cert(%CACertificate{} = certificate, opts \\ []) do
     {:ok, Repo.preload(certificate, opts)}
   end
 
