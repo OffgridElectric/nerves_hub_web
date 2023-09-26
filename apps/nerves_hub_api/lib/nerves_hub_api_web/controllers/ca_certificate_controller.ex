@@ -1,7 +1,7 @@
 defmodule NervesHubAPIWeb.CACertificateController do
   use NervesHubAPIWeb, :controller
 
-  alias NervesHubWebCore.{Devices, Certificate}
+  alias NervesHubWebCore.{Devices, Products, Certificate}
 
   action_fallback(NervesHubAPIWeb.FallbackController)
 
@@ -14,7 +14,24 @@ defmodule NervesHubAPIWeb.CACertificateController do
     render(conn, "index.json", ca_certificates: ca_certificates)
   end
 
-  def show(%{assigns: %{org: org}} = conn, %{"serial" => serial}) do
+  # TODO: Remove when legacy clients have been upgraded
+  def jitp(%{assigns: %{org: _org}} = conn, %{"ski" => ski64}) do
+    ski = ski64 |> Base.decode64!()
+
+    with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_ski(ski) do
+      render(conn, "jitp.json", ca_certificate: ca_certificate)
+    end
+  end
+
+  def show(%{assigns: %{org: _org}} = conn, %{"serial_or_ski" => "/ski/" <> ski16}) do
+    ski = ski16 |> String.upcase() |> Base.decode16!()
+
+    with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_ski(ski) do
+      render(conn, "show.json", ca_certificate: ca_certificate)
+    end
+  end
+
+  def show(%{assigns: %{org: org}} = conn, %{"serial_or_ski" => serial}) do
     with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_org_and_serial(org, serial) do
       render(conn, "show.json", ca_certificate: ca_certificate)
     end
@@ -27,16 +44,19 @@ defmodule NervesHubAPIWeb.CACertificateController do
          aki <- Certificate.get_aki(cert),
          ski <- Certificate.get_ski(cert),
          {not_before, not_after} <- Certificate.get_validity(cert),
-         params <- %{
-           serial: serial,
-           aki: aki,
-           ski: ski,
-           not_before: not_before,
-           not_after: not_after,
-           der: X509.Certificate.to_der(cert),
-           description: Map.get(params, "description")
-         },
-         {:ok, ca_certificate} <- Devices.create_ca_certificate(org, params) do
+         params <-
+           %{
+             serial: serial,
+             aki: aki,
+             ski: ski,
+             not_before: not_before,
+             not_after: not_after,
+             der: X509.Certificate.to_der(cert),
+             description: Map.get(params, "description")
+           }
+           |> maybe_merge_jitp(org, params),
+         {:ok, ca_certificate} <-
+           Devices.create_ca_certificate(org, params) do
       conn
       |> put_status(:created)
       |> put_resp_header(
@@ -48,6 +68,30 @@ defmodule NervesHubAPIWeb.CACertificateController do
       {:error, :not_found} -> {:error, "error decoding certificate"}
       e -> e
     end
+  end
+
+  defp maybe_merge_jitp(params, org, %{"jitp" => jitp64}) do
+    decoded_jitp = jitp64 |> Base.decode64!() |> Jason.decode!()
+
+    case Products.get_product_by_org_id_and_name(org.id, decoded_jitp["product"]) do
+      {:ok, product} ->
+        jitp_params = %{
+          jitp: %{
+            product_id: product.id,
+            description: decoded_jitp["description"],
+            tags: decoded_jitp["tags"]
+          }
+        }
+
+        Map.merge(params, jitp_params)
+
+      {:error, :not_found} ->
+        {:error, "product not found"}
+    end
+  end
+
+  defp maybe_merge_jitp(params, _org, _params) do
+    params
   end
 
   def delete(%{assigns: %{org: org}} = conn, %{"serial" => serial}) do

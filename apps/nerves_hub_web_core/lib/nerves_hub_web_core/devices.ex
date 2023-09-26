@@ -23,7 +23,7 @@ defmodule NervesHubWebCore.Devices do
   alias NervesHubWebCore.Devices.{Device, DeviceCertificate, CACertificate}
   alias NervesHubWebCore.TaskSupervisor, as: Tasks
 
-  @min_fwup_delta_updatable_version ">=1.6.0"
+  @min_fwup_delta_updatable_version ">=1.10.0"
 
   def get_device(device_id), do: Repo.get(Device, device_id)
   def get_device!(device_id), do: Repo.get!(Device, device_id)
@@ -407,7 +407,21 @@ defmodule NervesHubWebCore.Devices do
     Repo.get_by(CACertificate, ski: ski)
     |> case do
       nil -> {:error, :not_found}
-      ca_cert -> preload_cert(ca_cert)
+      ca_cert -> preload_cert(ca_cert, jitp: :product)
+    end
+  end
+
+  @spec get_jitp_by_ski(binary) :: {:ok, CACertificate.JITP.t()} | {:error, any()}
+  def get_jitp_by_ski(ski) do
+    Repo.get_by(CACertificate, ski: ski)
+    |> case do
+      nil ->
+        {:error, :not_found}
+
+      ca_cert ->
+        with {:ok, %{jitp: jitp}} <- preload_cert(ca_cert, jitp: :product) do
+          {:ok, jitp}
+        end
     end
   end
 
@@ -416,7 +430,7 @@ defmodule NervesHubWebCore.Devices do
     Repo.get_by(CACertificate, serial: serial)
     |> case do
       nil -> {:error, :not_found}
-      ca_cert -> preload_cert(ca_cert)
+      ca_cert -> preload_cert(ca_cert, jitp: :product)
     end
   end
 
@@ -436,12 +450,12 @@ defmodule NervesHubWebCore.Devices do
         {:error, :not_found}
 
       ca_cert ->
-        preload_cert(ca_cert)
+        preload_cert(ca_cert, jitp: :product)
     end
   end
 
-  def preload_cert(%CACertificate{} = certificate) do
-    {:ok, Repo.preload(certificate, [:jitp])}
+  def preload_cert(%CACertificate{} = certificate, opts \\ []) do
+    {:ok, Repo.preload(certificate, opts)}
   end
 
   def update_ca_certificate(%CACertificate{} = certificate, params) do

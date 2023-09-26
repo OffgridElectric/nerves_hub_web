@@ -66,8 +66,12 @@ defmodule NervesHubAPIWeb.Router do
         scope "/ca_certificates" do
           get("/", CACertificateController, :index)
           post("/", CACertificateController, :create)
-          get("/:serial", CACertificateController, :show)
+          get("/:serial_or_ski", CACertificateController, :show)
           delete("/:serial", CACertificateController, :delete)
+        end
+
+        scope "/jitp" do
+          get("/:ski", CACertificateController, :jitp)
         end
 
         # The /org/:org_id/device* endpoints should return an error
