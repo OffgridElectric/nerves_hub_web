@@ -302,7 +302,7 @@ jobs:
   deploy-prod:
     <<: *defaults
     steps:
-      - run: echo "export CLUSTER=nerves-hub" >> $BASH_ENV
+      - run: echo "export CLUSTER=nerves-hub-production" >> $BASH_ENV
       - run: echo "export services=[nerves-hub-device,nerves-hub-api,nerves-hub-www]" >> $BASH_ENV
       - <<: *aws_login
       - <<: *redeploy-service    
