@@ -66,7 +66,8 @@ defmodule NervesHubAPIWeb.Router do
         scope "/ca_certificates" do
           get("/", CACertificateController, :index)
           post("/", CACertificateController, :create)
-          get("/:serial_or_ski", CACertificateController, :show)
+          get("/ski/:ski", CACertificateController, :show, as: :ca_certificate_by_ski)
+          get("/:serial", CACertificateController, :show)
           delete("/:serial", CACertificateController, :delete)
         end
 
