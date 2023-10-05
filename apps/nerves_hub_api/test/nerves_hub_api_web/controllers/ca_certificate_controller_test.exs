@@ -51,10 +51,24 @@ defmodule NervesHubAPIWeb.CACertificateControllerTest do
   describe "view ca_certificate" do
     setup [:create_ca_certificate_with_jitp]
 
+    test "renders when given a valid serial", %{
+      conn: conn,
+      org: org,
+      ca_certificate: ca_certificate
+    } do
+      %{serial: serial, description: description} = ca_certificate
+
+      conn = get(conn, Routes.ca_certificate_path(conn, :show, org.name, serial))
+
+      resp_data = json_response(conn, 200)["data"]
+      assert %{"serial" => ^serial} = resp_data
+      assert %{"description" => ^description} = resp_data
+    end
+
     test "renders when given valid SKI", %{conn: conn, org: org, ca_certificate: ca_certificate} do
       ski16 = Base.encode16(ca_certificate.ski)
 
-      conn = get(conn, Routes.ca_certificate_path(conn, :show, org.name, "/ski/#{ski16}"))
+      conn = get(conn, Routes.ca_certificate_by_ski_path(conn, :show, org.name, "#{ski16}"))
 
       resp_data = json_response(conn, 200)["data"]
 
@@ -74,7 +88,7 @@ defmodule NervesHubAPIWeb.CACertificateControllerTest do
     test "supports legacy behaviour", %{conn: conn, org: org, ca_certificate: ca_certificate} do
       ski64 = Base.encode64(ca_certificate.ski)
 
-      conn = get(conn, Routes.ca_certificate_path(conn, :jitp, org.name, "#{ski64}"))
+      conn = get(conn, Routes.ca_certificate_path(conn, :jitp, org.name, ski64))
 
       resp_data = json_response(conn, 200)["data"]
 
