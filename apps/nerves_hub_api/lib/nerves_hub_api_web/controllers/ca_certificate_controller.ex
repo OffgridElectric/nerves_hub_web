@@ -23,7 +23,7 @@ defmodule NervesHubAPIWeb.CACertificateController do
     end
   end
 
-  def show(%{assigns: %{org: _org}} = conn, %{"serial_or_ski" => "/ski/" <> ski16}) do
+  def show(%{assigns: %{org: _org}} = conn, %{"ski" => ski16}) do
     ski = ski16 |> String.upcase() |> Base.decode16!()
 
     with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_ski(ski) do
@@ -31,7 +31,7 @@ defmodule NervesHubAPIWeb.CACertificateController do
     end
   end
 
-  def show(%{assigns: %{org: org}} = conn, %{"serial_or_ski" => serial}) do
+  def show(%{assigns: %{org: org}} = conn, %{"serial" => serial}) do
     with {:ok, ca_certificate} <- Devices.get_ca_certificate_by_org_and_serial(org, serial) do
       render(conn, "show.json", ca_certificate: ca_certificate)
     end
