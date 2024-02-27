@@ -1,6 +1,8 @@
 defmodule NervesHubDevice.SSL do
   alias NervesHubWebCore.{Devices, Certificate}
 
+  require Logger
+
   @type pkix_path_validation_reason ::
           :cert_expired
           | :invalid_issuer
@@ -66,11 +68,21 @@ defmodule NervesHubDevice.SSL do
 
   defp do_verify(otp_cert, state) do
     case verify_cert(otp_cert) do
-      {:ok, _db_cert} -> {:valid, state}
-      {:error, {:bad_cert, reason}} -> {:fail, reason}
-      {:error, _} -> {:fail, :registration_failed}
-      reason when is_atom(reason) -> {:fail, reason}
-      _ -> {:fail, :unknown_server_error}
+      {:ok, _db_cert} ->
+        {:valid, state}
+
+      {:error, {:bad_cert, reason}} ->
+        Logger.warn("Bad Cert", message: "#{inspect(otp_cert)}")
+        {:fail, reason}
+
+      {:error, _} ->
+        {:fail, :registration_failed}
+
+      reason when is_atom(reason) ->
+        {:fail, reason}
+
+      _ ->
+        {:fail, :unknown_server_error}
     end
   end
 
