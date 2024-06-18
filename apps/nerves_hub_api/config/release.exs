@@ -36,12 +36,16 @@ config :nerves_hub_web_core, NervesHubWebCore.Firmwares.Upload.S3,
 config :nerves_hub_web_core, NervesHubWebCore.Workers.FirmwaresTransferS3Ingress,
   bucket: System.fetch_env!("S3_LOG_BUCKET_NAME")
 
+# config :nerves_hub_web_core, NervesHubWebCore.Mailer,
+#   adapter: Bamboo.SMTPAdapter,
+#   server: System.fetch_env!("SES_SERVER"),
+#   port: System.fetch_env!("SES_PORT"),
+#   username: System.fetch_env!("SMTP_USERNAME"),
+#   password: System.fetch_env!("SMTP_PASSWORD"),
+#   allow_signups?: System.get_env("ALLOW_SIGNUPS", "false") |> String.to_atom()
+
 config :nerves_hub_web_core, NervesHubWebCore.Mailer,
-  adapter: Bamboo.SMTPAdapter,
-  server: System.fetch_env!("SES_SERVER"),
-  port: System.fetch_env!("SES_PORT"),
-  username: System.fetch_env!("SMTP_USERNAME"),
-  password: System.fetch_env!("SMTP_PASSWORD"),
+  adapter: Bamboo.SesAdapter,
   allow_signups?: System.get_env("ALLOW_SIGNUPS", "false") |> String.to_atom()
 
 host = System.fetch_env!("HOST")
