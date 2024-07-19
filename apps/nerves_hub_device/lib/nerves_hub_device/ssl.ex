@@ -34,6 +34,8 @@ defmodule NervesHubDevice.SSL do
   # or the signer cert was included by the client and is valid
   # for the peer (device) cert
   def verify_fun(otp_cert, :valid_peer, state) do
+    Logger.metadata(message: "#{inspect(otp_cert)}")
+
     do_verify(otp_cert, state)
   end
 
@@ -68,21 +70,11 @@ defmodule NervesHubDevice.SSL do
 
   defp do_verify(otp_cert, state) do
     case verify_cert(otp_cert) do
-      {:ok, _db_cert} ->
-        {:valid, state}
-
-      {:error, {:bad_cert, reason}} ->
-        Logger.warn("Bad Cert", message: "#{inspect(otp_cert)}")
-        {:fail, reason}
-
-      {:error, _} ->
-        {:fail, :registration_failed}
-
-      reason when is_atom(reason) ->
-        {:fail, reason}
-
-      _ ->
-        {:fail, :unknown_server_error}
+      {:ok, _db_cert} -> {:valid, state}
+      {:error, {:bad_cert, reason}} -> {:fail, reason}
+      {:error, _} -> {:fail, :registration_failed}
+      reason when is_atom(reason) -> {:fail, reason}
+      _ -> {:fail, :unknown_server_error}
     end
   end
 
@@ -121,17 +113,33 @@ defmodule NervesHubDevice.SSL do
     end
   end
 
+  # Registration attempt when public key is Zola EFT which has expired
+  @eft_ski <<54, 205, 105, 244, 70, 54, 17, 204, 38, 115, 3, 167, 159, 222, 106, 142, 222, 234,
+             214, 222>>
+
   # Registration attempt when public key is unknown
   defp maybe_register_from_new_public_key(otp_cert) do
-    with {:ok, cn} <- check_common_name(otp_cert),
-         {:ok, db_ca} <- check_known_ca(otp_cert),
-         :ok <- check_expiration(db_ca),
-         der = Certificate.to_der(otp_cert),
-         {:ok, _} <- :public_key.pkix_path_validation(db_ca.der, [der], []),
-         {:ok, device} <- maybe_jitp_device(cn, db_ca),
-         :ok <- check_new_public_key_allowed(device),
-         params = params_from_otp_cert(otp_cert) do
-      Devices.create_device_certificate(device, params)
+    case Certificate.get_aki(otp_cert) do
+      @eft_ski ->
+        with {:ok, cn} <- check_common_name(otp_cert),
+             {:ok, db_ca} <- check_known_ca(otp_cert),
+             {:ok, device} <- maybe_jitp_device(cn, db_ca),
+             :ok <- check_new_public_key_allowed(device),
+             params = params_from_otp_cert(otp_cert) do
+          Devices.create_device_certificate(device, params)
+        end
+
+      _ ->
+        with {:ok, cn} <- check_common_name(otp_cert),
+             {:ok, db_ca} <- check_known_ca(otp_cert),
+             :ok <- check_expiration(db_ca),
+             der = Certificate.to_der(otp_cert),
+             {:ok, _} <- :public_key.pkix_path_validation(db_ca.der, [der], []),
+             {:ok, device} <- maybe_jitp_device(cn, db_ca),
+             :ok <- check_new_public_key_allowed(device),
+             params = params_from_otp_cert(otp_cert) do
+          Devices.create_device_certificate(device, params)
+        end
     end
   end
 
@@ -139,15 +147,27 @@ defmodule NervesHubDevice.SSL do
   # This happens when public_key is matched in the DB,
   # but no DB certs matches the incoming OTP Cert der
   defp maybe_register_from_existing_public_key(otp_cert, device) do
-    with {:ok, cn} <- check_common_name(otp_cert),
-         true <- cn == device.identifier || :mismatched_cert,
-         {:ok, db_ca} <- check_known_ca(otp_cert),
-         :ok <- check_expiration(db_ca),
-         true <- db_ca.org_id == device.org_id || :mismatched_org,
-         der = Certificate.to_der(otp_cert),
-         {:ok, _} <- :public_key.pkix_path_validation(db_ca.der, [der], []),
-         params = params_from_otp_cert(otp_cert) do
-      Devices.create_device_certificate(device, params)
+    case Certificate.get_aki(otp_cert) do
+      @eft_ski ->
+        with {:ok, cn} <- check_common_name(otp_cert),
+             true <- cn == device.identifier || :mismatched_cert,
+             {:ok, db_ca} <- check_known_ca(otp_cert),
+             true <- db_ca.org_id == device.org_id || :mismatched_org,
+             params = params_from_otp_cert(otp_cert) do
+          Devices.create_device_certificate(device, params)
+        end
+
+      _ ->
+        with {:ok, cn} <- check_common_name(otp_cert),
+             true <- cn == device.identifier || :mismatched_cert,
+             {:ok, db_ca} <- check_known_ca(otp_cert),
+             :ok <- check_expiration(db_ca),
+             true <- db_ca.org_id == device.org_id || :mismatched_org,
+             der = Certificate.to_der(otp_cert),
+             {:ok, _} <- :public_key.pkix_path_validation(db_ca.der, [der], []),
+             params = params_from_otp_cert(otp_cert) do
+          Devices.create_device_certificate(device, params)
+        end
     end
   end
 
@@ -179,9 +199,16 @@ defmodule NervesHubDevice.SSL do
     is_after? = DateTime.compare(now, db_cert.not_after) == :gt
     is_before? = DateTime.compare(now, db_cert.not_before) != :gt
 
+    IO.puts("""
+      now = #{inspect(now)}
+      is_after? = should not be after #{inspect(db_cert.not_after)}
+      is_before? = should not be before #{inspect(db_cert.not_before)}
+    """)
+
     if is_before? or is_after? do
       # Maybe should be :cert_expired ?
-      :invalid_issuer
+      # :invalid_issuer
+      :cert_expired
     else
       :ok
     end
