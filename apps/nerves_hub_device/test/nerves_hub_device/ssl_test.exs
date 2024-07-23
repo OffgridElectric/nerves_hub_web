@@ -182,7 +182,7 @@ defmodule NervesHubDevice.SSLTest do
       expired_ca = do_corruption(context.ca_cert, :expired)
       {:ok, db_ca} = Devices.create_ca_certificate_from_x509(context.org, expired_ca)
       assert is_nil(db_ca.last_used)
-      assert {:fail, :invalid_issuer} = run_verify(context.cert2)
+      assert {:fail, :cert_expired} = run_verify(context.cert2)
       refute is_nil(Fixtures.reload(db_ca).last_used)
     end
 
@@ -230,7 +230,7 @@ defmodule NervesHubDevice.SSLTest do
       expired_ca = do_corruption(context.unknown_signer, :expired)
       {:ok, db_ca} = Devices.create_ca_certificate_from_x509(context.org, expired_ca)
       assert is_nil(db_ca.last_used)
-      assert {:fail, :invalid_issuer} = run_verify(context.unknown_cert)
+      assert {:fail, :cert_expired} = run_verify(context.unknown_cert)
       refute is_nil(Fixtures.reload(db_ca).last_used)
     end
 
