@@ -65,6 +65,7 @@ defmodule NervesHubWebCore.MixProject do
       {:bamboo, "~> 2.0"},
       {:bamboo_phoenix, "~> 1.0"},
       {:bamboo_smtp, "~> 4.1"},
+      {:bamboo_ses, "~> 0.3"},
       {:jason, "~> 1.2", override: true},
       {:ecto, "~> 3.4", override: true},
       {:mox, "~> 1.0", only: [:test, :dev]},
